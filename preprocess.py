@@ -1,14 +1,3 @@
-PATH_WIKI_XML = 'D:\\things'
-FILENAME_WIKI = 'simplewiki-20191101-pages-meta-current.xml'
-FILENAME_ARTICLES = 'articles.csv'
-FILENAME_REDIRECT = 'articles_redirect.csv'
-FILENAME_TEMPLATE = 'articles_template.csv'
-FILENAME_FULL_ARTICLES = 'full_articles.csv'
-FILENAME_CLEAN_ARTICLES = 'clean_articles.csv'
-ENCODING = "utf-8"
-NUM_TOPICS = 500
-
-
 import codecs
 import copy
 import csv
@@ -35,7 +24,21 @@ from nltk.tokenize import TreebankWordTokenizer
 from scipy import spatial
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-
+PATH_WIKI_XML = 'D:\\things'
+FILENAME_WIKI = 'simplewiki-20191101-pages-meta-current.xml'
+FILENAME_ARTICLES = 'articles.csv'
+FILENAME_REDIRECT = 'articles_redirect.csv'
+FILENAME_TEMPLATE = 'articles_template.csv'
+FILENAME_FULL_ARTICLES = 'full_articles.csv'
+FILENAME_CLEAN_ARTICLES = 'clean_articles.csv'
+ENCODING = "utf-8"
+NUM_TOPICS = 500
+nltk.download('stopwords')
+nltk.download('punkt')
+stopwords = nltk.corpus.stopwords.words('english')
+stopwords += '- -- " \' ? , . ! * ** *** ( ) = == === : ; \'\' ` `` [ ] & %'.split()
+regex = re.compile("\[\[[\w\s]*\]\]")
+nonword = re.compile(r'^\W*$')
 
 class MLStripper(HTMLParser):
     def __init__(self):
@@ -109,7 +112,7 @@ def strip_tags(html):
     return s.get_data()
 
 def strip_tag_name(t):
-    t = elem.tag
+    # t = elem.tag
     idx = k = t.rfind("}")
     if idx != -1:
         t = t[idx + 1:]
@@ -170,7 +173,7 @@ def dump2csv(pathWikiXML, pathArticles, pathArticlesRedirect, pathTemplateRedire
             if event == 'start':
                 if tname == 'page':
                     title = ''
-                    id = -1
+                    idnum = -1
                     redirect = ''
                     text = ''
                     inrevision = False
@@ -182,7 +185,7 @@ def dump2csv(pathWikiXML, pathArticles, pathArticlesRedirect, pathTemplateRedire
                 if tname == 'title':
                     title = elem.text
                 elif tname == 'id' and not inrevision:
-                    id = int(elem.text)
+                    idnum = int(elem.text)
                 elif tname == 'redirect':
                     redirect = elem.attrib['title']
                 elif tname == 'ns':
@@ -194,21 +197,20 @@ def dump2csv(pathWikiXML, pathArticles, pathArticlesRedirect, pathTemplateRedire
 
                     if ns == 10:
                         templateCount += 1
-                        templateWriter.writerow([id, title])
+                        templateWriter.writerow([idnum, title])
                     elif len(redirect) > 0:
                         articleCount += 1
-                        articlesWriter.writerow([id, title, text.replace(',', ',')])
+                        articlesWriter.writerow([idnum, title, text.replace(',', ',')])
 
                     else:
                         redirectCount += 1
-                        redirectWriter.writerow([id, title, text.replace(',', ',')])
+                        redirectWriter.writerow([idnum, title, text.replace(',', ',')])
 
 
                     # if totalCount > 1 and (totalCount % 100000) == 0:
                     #     print("{:,}".format(totalCount))
 
                 elem.clear()
-
     # elapsed_time = time.time() - start_time
     # print("Total pages: {:,}".format(totalCount))
     # print("Template pages: {:,}".format(templateCount))
@@ -235,21 +237,13 @@ def main():
     dfOnlyArticles = dfOnlyArticles.loc[[t[:10] != 'Wikipedia:' for t in dfOnlyArticles['title']]]
     dfOnlyArticles.to_csv(pathFullArticles)
 
-    regex = re.compile("\[\[[\w\s]*\]\]")
-    nonword = re.compile(r'^\W*$')
-
     dfCleanArticles = copy.copy(dfOnlyArticles)
     dfCleanArticles['text'] = dfCleanArticles['text'].apply(lambda x: clean_article(x))
-    dfCleanArticles['id'] = [t + 1 for t in range(len(dfCleanArticles['id']))]
+    dfCleanArticles['id'] = [t + 1 for t in range(len(dfCleanArticles['id']))] # reset IDs after removal
     dfCleanArticles.set_index('id')
     dfCleanArticles.to_csv(pathCleanArticles)
 
     corpus = pd.read_csv(pathCleanArticles, encoding=ENCODING)
-
-    nltk.download('stopwords')
-    nltk.download('punkt')
-    stopwords = nltk.corpus.stopwords.words('english')
-    stopwords += '- -- " \' ? , . ! * ** *** ( ) = == === : ; \'\' ` `` [ ] & %'.split()
 
     articles = [str(text) for text in corpus.text]
     titles = [str(title) for title in corpus.title]
